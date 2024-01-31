@@ -1,0 +1,4 @@
+flask
+Flask-JWT-Extended
+mysql-connector-python
+dumb-init

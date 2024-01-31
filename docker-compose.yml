@@ -1,0 +1,47 @@
+version: "3.0"
+services:
+  flask:
+    image: flask:1.0.0
+    tty: true
+    container_name: flask
+    restart: unless-stopped
+    privileged: true
+    hostname: 'flask'
+    environment:
+      DB_HOST: mysql
+      DB_NAME: flask
+      DB_USER: flask
+      DB_PASSWORD: flask@123
+      JWT_SECRET_KEY: LK5FCXTgb69TO38ENkltJnx8JUjf0tzrkb9N20VSb2Ck23hXXIWQC56ndQojwGqy
+    ports:
+      - '2210:22'
+      - '5000:5000'
+    volumes:
+      - "/data/flask/main.py:/data/project/main.py"
+    links:
+      - mysql:mysql
+    depends_on:
+      - mysql
+    networks:
+      cloud:
+        ipv4_address: "172.18.0.5"
+  mysql:
+    image: mysql:8.1.0
+    container_name: mysql
+    restart: unless-stopped
+    command: --max-binlog-size=200M --expire-logs-days=2
+    environment:
+      MYSQL_ROOT_PASSWORD: admin@123
+      MYSQL_DATABASE: flask
+      MYSQL_USER: flask
+      MYSQL_PASSWORD: flask@123
+    ports:
+      - 3306:3306
+    volumes:
+      - '/data/mysql:/var/lib/mysql'
+    networks:
+      cloud:
+        ipv4_address: "172.18.0.6"
+networks:
+  cloud:
+    external: true
