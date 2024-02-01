@@ -23,7 +23,7 @@ COPY resource $RESOURCE_PATH
 
 RUN  chmod +x ${SCRIPT_PATH}/start.sh && chmod +x ${SCRIPT_PATH}/init.sh  && \
 # 下面为内网时，使用内网源
-mv -f $RESOURCE_PATH/source/openEuler.repo  /etc/yum.repos.d/openEuler.repo && \
+# mv -f $RESOURCE_PATH/source/openEuler.repo  /etc/yum.repos.d/openEuler.repo && \
 dnf -y update && dnf -y install net-tools iproute wget vim gcc gcc-c++ bind-utils python3-pip passwd hostname openssh findutils systemd unzip iputils lrzsz  && \
 # 配置pip阿里源
 mkdir ~/.pip && cp ${RESOURCE_PATH}/pip.conf ~/.pip && \
