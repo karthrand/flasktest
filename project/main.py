@@ -10,6 +10,7 @@ import os
 
 app = Flask(__name__)
 
+
 # 配置JWT密钥
 ## 如果环境变量未配置JWT_SECRET_KEY，则生成一个安全的密钥
 secret_key = secrets.token_urlsafe(64)
@@ -22,7 +23,6 @@ db_user = os.getenv('DB_USER')
 db_password = os.getenv('DB_PASSWORD')
 db_name = os.getenv('DB_NAME')
 
-
 # 数据库配置信息
 db_config = {
     'host': db_host,
@@ -31,14 +31,13 @@ db_config = {
     'database': db_name
 }
 
-
 # 数据库连接函数
 def get_db_connection():
     connection = None
     try:
         connection = mysql.connector.connect(**db_config)
     except Error as e:
-        print(f"Error: {e}")
+        print(f"数据库连接错误: {e}")
     return connection
 
 # 数据库检测及初始化
@@ -61,6 +60,29 @@ def check_and_create_users_table():
                 password VARCHAR(255) NOT NULL
             )
         """)
+        # 查找admin用户
+        cursor.execute("SELECT * FROM users WHERE username = 'admin'")
+        admin_info = cursor.fetchone()
+
+        # 获取环境变量中的管理员密码
+        admin_password = os.getenv('ADMIN_PASSWORD')
+        if not admin_password:
+            raise ValueError("环境变量 ADMIN_PASSWORD 未设置")
+
+        if not admin_info:
+            # 如果admin不存在，则插入admin用户
+            cursor.execute(
+                "INSERT INTO users (username, password) VALUES (%s, %s)", 
+                ('admin', admin_password)
+            )
+        else:
+            # 如果环境变量中的密码与数据库中存储的密码不一致，则更新数据库中的密码
+            if admin_info[2] != admin_password:  # 假定密码存储在返回元组的第三个位置（索引2）
+                cursor.execute(
+                    "UPDATE users SET password = %s WHERE username = 'admin'", 
+                    (admin_password,)
+                )
+        
         connection.commit()
     except Error as e:
         print(f"数据库连接失败或执行错误: {e}")
@@ -73,6 +95,7 @@ def check_and_create_users_table():
 
 # 用户注册路由
 @app.route('/register', methods=['POST'])
+@jwt_required()
 def register():
     username = request.json.get('username', None)
     password = request.json.get('password', None)
@@ -130,14 +153,14 @@ def login():
         return jsonify({"message": "Bad username or password"}), 401
 
 # 受保护的路由
-@app.route('/protected', methods=['GET'])
+@app.route('/private', methods=['GET'])
 @jwt_required()
 def protected():
     current_user = get_jwt_identity()
     return jsonify(logged_in_as=current_user), 200
 
 # 不受保护的路由
-@app.route('/unprotected', methods=['GET'])
+@app.route('/public', methods=['GET'])
 def unprotected():
     return jsonify(message="Success"), 200
 

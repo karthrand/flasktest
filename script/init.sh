@@ -5,7 +5,7 @@ RESOURCE_PATH=$2
 ARCH=$3
 
 # 设置主机密码
-echo dahuacloud@123 | passwd root --stdin
+echo cloud@123 | passwd root --stdin
 # 设置sshd相关
 sed -i 's/#Port 22/Port 22/' /etc/ssh/sshd_config
 sed -i 's/#PermitRootLogin yes/PermitRootLogin yes/' /etc/ssh/sshd_config
