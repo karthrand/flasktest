@@ -5,7 +5,7 @@ stages:
 
 variables:
     # 置空则使用当前日期
-    VERSION:  ""
+    VERSION:  "debug"
     # 置空则为amd64
     ARCH: "all"
     # 没啥用的变量
