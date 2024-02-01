@@ -1,7 +1,7 @@
 version: "3.0"
 services:
   flask:
-    image: karthrand/flasktest:latest
+    image: karthrand/flasktest:debug
     tty: true
     container_name: flask
     restart: unless-stopped
@@ -15,7 +15,7 @@ services:
       ADMIN_PASSWORD: admin@123
       JWT_SECRET_KEY: LK5FCXTgb69TO38ENkltJnx8JUjf0tzrkb9N20VSb2Ck23hXXIWQC56ndQojwGqy
     ports:
-      - '2222:22'
+      - '2202:22'
       - '5000:5000'
     volumes:
       - "/data/flasktest/project:/data/project"
