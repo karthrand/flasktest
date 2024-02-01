@@ -19,7 +19,7 @@ ENV LANG=C.UTF-8
 # 拷贝文件夹
 COPY script $SCRIPT_PATH
 COPY resource $RESOURCE_PATH
-
+COPY project $PROJECT_PATH
 # 安装必备软件
 
 RUN  chmod +x ${SCRIPT_PATH}/start.sh && chmod +x ${SCRIPT_PATH}/init.sh  && \
