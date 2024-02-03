@@ -1,3 +1,8 @@
+import os 
+import secrets
+import configparser
+import subprocess
+import shutil
 from flask import Flask, jsonify, request
 from flask_jwt_extended import (
     JWTManager, jwt_required, create_access_token,
@@ -5,11 +10,10 @@ from flask_jwt_extended import (
 )
 import mysql.connector
 from mysql.connector import Error
-import secrets
-import os 
+from loguru import logger as log
+
 
 app = Flask(__name__)
-
 
 # 配置JWT密钥
 ## 如果环境变量未配置JWT_SECRET_KEY，则生成一个安全的密钥
@@ -17,19 +21,63 @@ secret_key = secrets.token_urlsafe(64)
 app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', secret_key)
 jwt = JWTManager(app)
 
+# 读取配置文件默认值
+# config.ini文件不存在时使用的默认值
+default_config = {
+    'db_default_host': '127.0.0.1',
+    'db_default_root_password': 'root@123',
+    'db_default_user_name': 'flask',
+    "db_default_user_password":  "flask@123",
+    "db_default_database_name":  "flask",
+    "local_db_config":  "/etc/my.cnf.d/mysql-server.cnf",
+    "default_admin_password":  "admin@123"
+}
+
+# 创建一个带有默认值的ConfigParser对象
+config = configparser.ConfigParser(defaults=default_config)
+config.read('config.ini', encoding='UTF-8')
+db_default_host = config['DB'].get("db_default_host")
+db_default_root_password = config['DB'].get("db_default_root_password")
+db_default_user_name = config['DB'].get("db_default_user_name")
+db_default_user_password = config['DB'].get("db_default_user_password")
+db_default_database_name = config['DB'].get("db_default_database_name")
+local_db_config = config['DB'].get("local_db_config")
+default_admin_password = config['DB'].get("default_admin_password")
+
 # 读取环境变量
-db_host = os.getenv('DB_HOST')
-db_user = os.getenv('DB_USER')
-db_password = os.getenv('DB_PASSWORD')
-db_name = os.getenv('DB_NAME')
+db_host = os.getenv('DB_HOST', db_default_host)
+db_root_password = os.getenv('DB_ROOT_PASSWORD', db_default_root_password)
+db_user = os.getenv('DB_USER', db_default_user_name)
+db_password = os.getenv('DB_PASSWORD', db_default_user_password)
+db_database_name = os.getenv('DB_NAME', db_default_database_name)
+use_ext_db =  os.getenv('EXT_DB', "false")
+admin_password = os.getenv('ADMIN_PASSWORD', default_admin_password)
 
 # 数据库配置信息
 db_config = {
     'host': db_host,
     'user': db_user,
     'password': db_password,
-    'database': db_name
+    'database': db_database_name
 }
+
+# 检查日志判断数据库是否完成初始化
+def check_innodb_initialization():
+    try:
+        # 执行grep命令搜索日志条目
+        result = subprocess.run(['grep', 'InnoDB initialization has ended', '/var/log/mysql/mysqld.log'],
+                                text=True, capture_output=True, check=True)
+        # 检查结果中是否有输出
+        if result.stdout:
+            log.info("数据库已完成初始化，跳过")
+            return True
+        else:
+            log.info("数据库未完成初始化，进行初始化")
+            return False
+    except subprocess.CalledProcessError:
+        # grep没有找到匹配项
+        log.info("数据库未完成初始化，进行初始化")
+        return False
 
 # 数据库连接函数
 def get_db_connection():
@@ -40,57 +88,154 @@ def get_db_connection():
         print(f"数据库连接错误: {e}")
     return connection
 
+
+def get_local_db_datadir():
+    # 使用configparser来解析MYSQL配置文件
+    log.info(f"加载mysql配置文件: {local_db_config}")
+    config = configparser.ConfigParser()
+    config.read(local_db_config)
+
+    # 获取datadir的值
+    file_info = config.get('mysqld', None)
+    if file_info is not  None:
+     data_directory= cinfig['mysqld'].get("datadir", None)
+    else:
+      data_directory = None
+
+    if data_directory is None:
+        raise Exception("无法在配置文件中找到 'datadir' 设置")
+    else:
+        # 检查datadir是否存在
+        if not os.path.exists(data_directory):
+            print(f"'{data_directory}' 不存在，正在创建...")
+            # 创建数据目录
+            os.makedirs(data)
+        return data_directory
+
+
+# 初始化本地数据库
+def init_local_db():
+    log.info("初始化本地mysql")
+    if not check_innodb_initialization():
+        # 先删除数据目录信息
+        try:
+            data_directory = get_local_db_datadir()
+            # 删除目录及其所有内容
+            shutil.rmtree(data_directory)
+            log.info(f"目录 {data_directory} 已被删除")
+            
+            # 重新创建目录
+            os.makedirs(data_directory)
+            log.info(f"目录 {data_directory} 已被重新创建")
+            
+        except PermissionError:
+            raise Exception(f"错误: 没有足够的权限来删除或创建 {data_directory}。请作为 root 用户运行此脚本")
+        except Exception as e:
+            raise Exception(f"发生错误: {e}")
+
+        # 将目录所有权改回给 MySQL 用户和组
+        try:
+            subprocess.run(['chown', '-R', 'mysql:mysql', data_directory], check=True)
+            log.info(f"已将 {data_directory} 的所有权更改为 mysql 用户和组。")
+        except Exception as e:
+          log.error(f"更改权限时发生错误: {e}")
+          raise
+            
+        try:
+            subprocess.run(['chmod', '-R', '700', data_directory], check=True)
+            log.infi(f"更改{data_directory}目录权限为700")
+        
+        except subprocess.CalledProcessError as e:
+            log.info(f"更改{data_directory}目录权限异常")
+
+        # 未进行初始化时
+        init_mysql_command = ['mysqld', '-u', 'root', '--initialize-insecure']
+        try:
+            # 运行初始化命令
+            subprocess.run(init_mysql_command, check=True)
+            log.info("初始化本地数据库成功")
+        except subprocess.CalledProcessError as e:
+            # 打印错误信息，并退出程序
+            log.error("初始化本地数据库失败 ", e)
+            raise
+        # 创建默认root和普通用户
+        sql_commands = f"""
+        ALTER USER 'root'@'localhost' IDENTIFIED BY '{db_root_password}';
+        CREATE USER '{db_user}'@'localhost' IDENTIFIED BY '{db_password}';
+        FLUSH PRIVILEGES;
+        """
+        try:
+            # 执行mysql命令
+            proc = subprocess.run(['mysql', '-u', 'root', '-p'],
+                                input=sql_commands,
+                                text=True,
+                                check=True,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE)
+            print(proc.stdout)
+            log.info(f"本地数据库root密码修改成功, 用户'{db_user}' 已创建.")
+        except subprocess.CalledProcessError as e:
+            log.info("执行mysql初始化库命令失败:", e.stderr)
+    
+
+
+
 # 数据库检测及初始化
 @app.before_request
 def check_and_create_users_table():
     """
     在处理第一个请求之前检查数据库连接并创建表
     """
-    connection = None
-    try:
-        # 建立数据库连接
-        print( f"db_config: {db_config}")
-        connection = mysql.connector.connect(**db_config)
-        # 检查并创建表
-        cursor = connection.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                username VARCHAR(255) NOT NULL,
-                password VARCHAR(255) NOT NULL
-            )
-        """)
-        # 查找admin用户
-        cursor.execute("SELECT * FROM users WHERE username = 'admin'")
-        admin_info = cursor.fetchone()
-
-        # 获取环境变量中的管理员密码
-        admin_password = os.getenv('ADMIN_PASSWORD')
-        if not admin_password:
-            raise ValueError("环境变量 ADMIN_PASSWORD 未设置")
-
-        if not admin_info:
-            # 如果admin不存在，则插入admin用户
-            cursor.execute(
-                "INSERT INTO users (username, password) VALUES (%s, %s)", 
-                ('admin', admin_password)
-            )
-        else:
-            # 如果环境变量中的密码与数据库中存储的密码不一致，则更新数据库中的密码
-            if admin_info[2] != admin_password:  # 假定密码存储在返回元组的第三个位置（索引2）
-                cursor.execute(
-                    "UPDATE users SET password = %s WHERE username = 'admin'", 
-                    (admin_password,)
+    # 使用本地数据库，需要进行初始化
+    log.debug(f"use_ext_db： {use_ext_db}")
+    if use_ext_db == "false":
+        log.info("当前应用使用本地数据库")
+        init_local_db()
+    else:
+        connection = None
+        try:
+            # 建立数据库连接
+            print( f"db_config: {db_config}")
+            connection = mysql.connector.connect(**db_config)
+            # 检查并创建表
+            cursor = connection.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    username VARCHAR(255) NOT NULL,
+                    password VARCHAR(255) NOT NULL
                 )
-        
-        connection.commit()
-    except Error as e:
-        print(f"数据库连接失败或执行错误: {e}")
-    finally:
-        if cursor:
-            cursor.close()
-        if connection and connection.is_connected():
-            connection.close()
+            """)
+            # 查找admin用户
+            cursor.execute("SELECT * FROM users WHERE username = 'admin'")
+            admin_info = cursor.fetchone()
+
+            # 获取环境变量中的管理员密码
+            if not admin_password:
+                raise ValueError("环境变量 ADMIN_PASSWORD 未设置")
+
+            if not admin_info:
+                # 如果admin不存在，则插入admin用户
+                cursor.execute(
+                    "INSERT INTO users (username, password) VALUES (%s, %s)", 
+                    ('admin', admin_password)
+                )
+            else:
+                # 如果环境变量中的密码与数据库中存储的密码不一致，则更新数据库中的密码
+                if admin_info[2] != admin_password:  # 假定密码存储在返回元组的第三个位置（索引2）
+                    cursor.execute(
+                        "UPDATE users SET password = %s WHERE username = 'admin'", 
+                        (admin_password,)
+                    )
+            
+            connection.commit()
+        except Error as e:
+            print(f"数据库连接失败或执行错误: {e}")
+        finally:
+            if cursor:
+                cursor.close()
+            if connection and connection.is_connected():
+                connection.close()
 
 
 # 用户注册路由

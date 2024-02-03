@@ -1,4 +1,5 @@
 flask
 Flask-JWT-Extended
 mysql-connector-python
+loguru
 dumb-init

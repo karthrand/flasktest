@@ -25,7 +25,7 @@ COPY project $PROJECT_PATH
 RUN  chmod +x ${SCRIPT_PATH}/start.sh && chmod +x ${SCRIPT_PATH}/init.sh  && \
 # 下面为内网时，使用内网源
 # mv -f $RESOURCE_PATH/source/openEuler.repo  /etc/yum.repos.d/openEuler.repo && \
-dnf -y update && dnf -y install net-tools iproute wget vim gcc gcc-c++ bind-utils python3-pip passwd hostname openssh findutils systemd unzip iputils lrzsz  && \
+dnf -y update && dnf -y install net-tools iproute wget vim bind-utils python3-pip passwd hostname openssh findutils unzip iputils lrzsz mysql mysql-server && \
 # 配置pip阿里源
 mkdir ~/.pip && cp ${RESOURCE_PATH}/pip.conf ~/.pip && \
 # 安装pip包相关，缓存层级

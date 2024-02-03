@@ -8,6 +8,7 @@ services:
     privileged: true
     hostname: 'flask'
     environment:
+      EXT_DB: true
       DB_HOST: mysql
       DB_NAME: flask
       DB_USER: flask
