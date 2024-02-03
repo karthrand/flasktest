@@ -17,6 +17,9 @@ from loguru import logger as log
 
 app = Flask(__name__)
 
+# 配置文件地址
+config_file = "/data/project/config.ini"
+
 # 配置JWT密钥
 ## 如果环境变量未配置JWT_SECRET_KEY，则生成一个安全的密钥
 secret_key = secrets.token_urlsafe(64)
@@ -37,7 +40,7 @@ default_config = {
 
 # 创建一个带有默认值的ConfigParser对象
 config = configparser.ConfigParser(defaults=default_config)
-config.read('config.ini', encoding='UTF-8')
+config.read(config_file, encoding='UTF-8')
 db_default_host = config['DB'].get("db_default_host")
 db_default_root_password = config['DB'].get("db_default_root_password")
 db_default_user_name = config['DB'].get("db_default_user_name")
@@ -119,8 +122,36 @@ def get_local_db_datadir():
         if not os.path.exists(data_directory):
             print(f"'{data_directory}' 不存在，正在创建...")
             # 创建数据目录
-            os.makedirs(data)
+            os.makedirs(data_directory)
         return data_directory
+
+
+def check_and_start_local_mysql():
+    log.info("检查本地mysql服务")
+    # 检查是否已经启动
+    if check_port(3306):
+        log.info("本地mysql已经启动")
+    else:
+        # 启动本地数据库
+        start_mysql_command = "mysqld -u mysql"
+        try:
+            # 运行初始化命令
+            # 使用subprocess.Popen来执行命令，使其在后台运行
+            process = subprocess.Popen(start_mysql_command, shell=True)
+            # 打印出进程ID
+            log.debug(f"mysqld started with PID {process.pid}")
+            for index in range(10):
+                if check_port(3306):
+                    break
+                else:
+                    time.sleep(1)
+            else:
+                raise Exception("数据库端口未启动")         
+            log.info("启动本地数据库成功")
+        except subprocess.CalledProcessError as e:
+            # 打印错误信息，并退出程序
+            log.error("启动本地数据库失败 ", e)
+            raise
 
 
 # 初始化本地数据库
@@ -169,36 +200,19 @@ def init_local_db():
             log.error("初始化本地数据库失败 ", e)
             raise
         
-        # 启动本地数据库
-        start_mysql_command = "mysqld -u mysql"
-        try:
-            # 运行初始化命令
-            # 使用subprocess.Popen来执行命令，使其在后台运行
-            process = subprocess.Popen(start_mysql_command, shell=True)
-            # 打印出进程ID
-            log.debug(f"mysqld started with PID {process.pid}")
-            for index in range(10):
-                if check_port(3306):
-                    break
-                else:
-                    time.sleep(1)
-            else:
-                raise Exception("数据库端口未启动")         
-            log.info("启动本地数据库成功")
-        except subprocess.CalledProcessError as e:
-            # 打印错误信息，并退出程序
-            log.error("启动本地数据库失败 ", e)
-            raise
+        check_and_start_local_mysql()
         
         # 创建默认root和普通用户
         sql_commands = f"""
+        CREATE DATABASE IF NOT EXISTS flask;
         ALTER USER 'root'@'localhost' IDENTIFIED BY '{db_root_password}';
-        CREATE USER '{db_user}'@'localhost' IDENTIFIED BY '{db_password}';
+        CREATE USER IF NOT EXISTS '{db_user}'@'localhost' IDENTIFIED BY '{db_password}';
+        GRANT ALL PRIVILEGES ON *.* TO '{db_user}'@'localhost';
         FLUSH PRIVILEGES;
         """
         try:
             # 执行mysql命令
-            proc = subprocess.run(['mysql', '-u', 'mysql'],
+            proc = subprocess.run(['mysql', '-u', 'root'],
                                 input=sql_commands,
                                 text=True,
                                 check=True,
@@ -207,10 +221,7 @@ def init_local_db():
             print(proc.stdout)
             log.info(f"本地数据库root密码修改成功, 用户'{db_user}' 已创建.")
         except subprocess.CalledProcessError as e:
-            log.info("执行mysql初始化库命令失败:", e.stderr)
-    
-
-
+            log.error("执行mysql初始化库命令失败:", e.stderr)
 
 # 数据库检测及初始化
 @app.before_request
@@ -223,52 +234,52 @@ def check_and_create_users_table():
     if use_ext_db == "false":
         log.info("当前应用使用本地数据库")
         init_local_db()
-    else:
-        connection = None
-        try:
-            # 建立数据库连接
-            print( f"db_config: {db_config}")
-            connection = mysql.connector.connect(**db_config)
-            # 检查并创建表
-            cursor = connection.cursor()
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    username VARCHAR(255) NOT NULL,
-                    password VARCHAR(255) NOT NULL
-                )
-            """)
-            # 查找admin用户
-            cursor.execute("SELECT * FROM users WHERE username = 'admin'")
-            admin_info = cursor.fetchone()
+        check_and_start_local_mysql()
 
-            # 获取环境变量中的管理员密码
-            if not admin_password:
-                raise ValueError("环境变量 ADMIN_PASSWORD 未设置")
+    connection = None
+    try:
+        # 建立数据库连接
+        print( f"db_config: {db_config}")
+        connection = mysql.connector.connect(**db_config)
+        # 检查并创建表
+        cursor = connection.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(255) NOT NULL,
+                password VARCHAR(255) NOT NULL
+            )
+        """)
+        # 查找admin用户
+        cursor.execute("SELECT * FROM users WHERE username = 'admin'")
+        admin_info = cursor.fetchone()
 
-            if not admin_info:
-                # 如果admin不存在，则插入admin用户
+        # 获取环境变量中的管理员密码
+        if not admin_password:
+            raise ValueError("环境变量 ADMIN_PASSWORD 未设置")
+
+        if not admin_info:
+            # 如果admin不存在，则插入admin用户
+            cursor.execute(
+                "INSERT INTO users (username, password) VALUES (%s, %s)", 
+                ('admin', admin_password)
+            )
+        else:
+            # 如果环境变量中的密码与数据库中存储的密码不一致，则更新数据库中的密码
+            if admin_info[2] != admin_password:  # 假定密码存储在返回元组的第三个位置（索引2）
                 cursor.execute(
-                    "INSERT INTO users (username, password) VALUES (%s, %s)", 
-                    ('admin', admin_password)
+                    "UPDATE users SET password = %s WHERE username = 'admin'", 
+                    (admin_password,)
                 )
-            else:
-                # 如果环境变量中的密码与数据库中存储的密码不一致，则更新数据库中的密码
-                if admin_info[2] != admin_password:  # 假定密码存储在返回元组的第三个位置（索引2）
-                    cursor.execute(
-                        "UPDATE users SET password = %s WHERE username = 'admin'", 
-                        (admin_password,)
-                    )
-            
-            connection.commit()
-        except Error as e:
-            print(f"数据库连接失败或执行错误: {e}")
-        finally:
-            if cursor:
-                cursor.close()
-            if connection and connection.is_connected():
-                connection.close()
-
+        
+        connection.commit()
+    except Error as e:
+        print(f"数据库连接失败或执行错误: {e}")
+    finally:
+        if cursor:
+            cursor.close()
+        if connection and connection.is_connected():
+            connection.close()
 
 # 用户注册路由
 @app.route('/register', methods=['POST'])
@@ -343,4 +354,3 @@ def unprotected():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', debug=True)
- 

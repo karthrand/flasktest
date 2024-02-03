@@ -76,16 +76,8 @@ push_job:
       echo "当前镜像版本为：$VERSION"
       echo "当前镜像架构为：$ARCH"
       echo "登录Dockerhub"
-      echo $DOCKERHUB_PASSWORD | docker login --username $DOCKERHUB_USER --password-stdin\
+      echo $DOCKERHUB_PASSWORD | docker login --username $DOCKERHUB_USER --password-stdin
 
-      if [ ${ARCH} == "" ]; then
-          
-          docker push $IMAGE_NAME:$VERSION
-          docker tag $IMAGE_NAME:$VERSION $IMAGE_NAME:latest
-          docker push $IMAGE_NAME:latest
-      else
-          echo "当前系统非X86_64, 暂时不支持多架构镜像推送"
-      fi
       func_amd64(){
           echo "上传: $IMAGE_NAME:$VERSION-amd64"
           docker push $IMAGE_NAME:$VERSION-amd64
