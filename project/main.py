@@ -3,6 +3,8 @@ import secrets
 import configparser
 import subprocess
 import shutil
+import re
+import time
 from flask import Flask, jsonify, request
 from flask_jwt_extended import (
     JWTManager, jwt_required, create_access_token,
@@ -88,6 +90,19 @@ def get_db_connection():
         print(f"数据库连接错误: {e}")
     return connection
 
+# 检查端口是否启动的函数
+def check_port(port):
+    try:
+        # 执行netstat命令
+        result = subprocess.run(['netstat', '-ntlp'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=True)
+        # 搜索端口号
+        if re.search(f":{port}\\s", result.stdout):
+            return True
+        else:
+            return False
+    except subprocess.CalledProcessError as e:
+        print(f"An error occurred: {e}")
+        return False
 
 def get_local_db_datadir():
     # 使用configparser来解析MYSQL配置文件
@@ -96,12 +111,7 @@ def get_local_db_datadir():
     config.read(local_db_config)
 
     # 获取datadir的值
-    file_info = config.get('mysqld', None)
-    if file_info is not  None:
-     data_directory= cinfig['mysqld'].get("datadir", None)
-    else:
-      data_directory = None
-
+    data_directory= config['mysqld'].get("datadir", None)
     if data_directory is None:
         raise Exception("无法在配置文件中找到 'datadir' 设置")
     else:
@@ -143,13 +153,13 @@ def init_local_db():
             
         try:
             subprocess.run(['chmod', '-R', '700', data_directory], check=True)
-            log.infi(f"更改{data_directory}目录权限为700")
+            log.info(f"更改{data_directory}目录权限为700")
         
         except subprocess.CalledProcessError as e:
             log.info(f"更改{data_directory}目录权限异常")
 
         # 未进行初始化时
-        init_mysql_command = ['mysqld', '-u', 'root', '--initialize-insecure']
+        init_mysql_command = ['mysqld', '-u', 'mysql', '--initialize-insecure']
         try:
             # 运行初始化命令
             subprocess.run(init_mysql_command, check=True)
@@ -158,6 +168,28 @@ def init_local_db():
             # 打印错误信息，并退出程序
             log.error("初始化本地数据库失败 ", e)
             raise
+        
+        # 启动本地数据库
+        start_mysql_command = "mysqld -u mysql"
+        try:
+            # 运行初始化命令
+            # 使用subprocess.Popen来执行命令，使其在后台运行
+            process = subprocess.Popen(start_mysql_command, shell=True)
+            # 打印出进程ID
+            log.debug(f"mysqld started with PID {process.pid}")
+            for index in range(10):
+                if check_port(3306):
+                    break
+                else:
+                    time.sleep(1)
+            else:
+                raise Exception("数据库端口未启动")         
+            log.info("启动本地数据库成功")
+        except subprocess.CalledProcessError as e:
+            # 打印错误信息，并退出程序
+            log.error("启动本地数据库失败 ", e)
+            raise
+        
         # 创建默认root和普通用户
         sql_commands = f"""
         ALTER USER 'root'@'localhost' IDENTIFIED BY '{db_root_password}';
@@ -166,7 +198,7 @@ def init_local_db():
         """
         try:
             # 执行mysql命令
-            proc = subprocess.run(['mysql', '-u', 'root', '-p'],
+            proc = subprocess.run(['mysql', '-u', 'mysql'],
                                 input=sql_commands,
                                 text=True,
                                 check=True,
