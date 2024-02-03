@@ -1,10 +1,11 @@
 stages:
   - build
+  - test
   - push
 
 variables:
     # 置空则使用当前日期
-    VERSION:  "debug"
+    VERSION:  ""
     # 置空则为amd64
     ARCH: "all"
     # 没啥用的变量
@@ -59,6 +60,81 @@ build_job:
     paths:
       - env.sh
     expire_in: 5 minutes 
+
+test_job:
+  stage: test
+  tags:
+    - docker
+  dependencies:
+    - build_job
+  rules:
+    - if: '$CI_COMMIT_MESSAGE =~ /镜像构建/'
+      when: on_success
+    - when: never
+  script:
+    - |
+      source env.sh
+      export RANDOM_NUMBER_1=$(($RANDOM % 1000))
+      export RANDOM_NUMBER_2=$(($RANDOM % 2000))
+      echo "当前镜像版本为：$VERSION"
+      echo "当前镜像架构为：$ARCH"
+      func_test(){
+        random_str=$1
+        image_name=$2
+        test_arch=$3
+        echo "----------------------------------------"
+        echo "当前测试镜像： ${image_name}"
+        echo "当前测试架构：${test_arch}"
+        echo "启动测试容器：${CONTAINER_NAME}-${random_str}"
+        if [[ $test_arch == "arm64" ]]; then
+            docker run --platform linux/arm64 --rm -d --name ${CONTAINER_NAME}-${random_str} $image_name
+            echo "等待容器及服务就绪"
+            sleep 35
+        else
+            docker run --rm -d --name ${CONTAINER_NAME}-${random_str} $image_name
+            echo "等待容器及服务就绪"
+            sleep 10
+        fi
+        ip=`docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${CONTAINER_NAME}-${random_str}`
+        echo "当前容器ip：${ip}"
+        response=$(curl -s http://${ip}:5000/public) || true
+        echo "返回判断：$response"
+        if [[ "$response" == *${test_except_str}* ]]; then
+            echo "正常: $response"
+        else
+            echo "错误: 期待响应返回${test_except_str}等, 但实际响应是: $response"
+            exit 1
+        fi
+      }
+      if [ ${ARCH} == "all" ]; then
+          echo "export RANDOM_NUMBER_1=$RANDOM_NUMBER_1" >> env.sh
+          echo "export RANDOM_NUMBER_2=$RANDOM_NUMBER_2" >> env.sh
+          func_test $RANDOM_NUMBER_1 $IMAGE_NAME:$VERSION-amd64 amd64
+          func_test $RANDOM_NUMBER_2 $IMAGE_NAME:$VERSION-arm64 arm64
+      elif [ ${ARCH} == "arm64" ]; then
+          echo "export RANDOM_NUMBER_2=$RANDOM_NUMBER_2" >> env.sh
+          func_test $RANDOM_NUMBER_2 $IMAGE_NAME:$VERSION-amd64 amd64
+      else
+          echo "export RANDOM_NUMBER_1=$RANDOM_NUMBER_1" >> env.sh
+          func_test $RANDOM_NUMBER_1 $IMAGE_NAME:$VERSION-arm64 arm64
+      fi
+  after_script:
+    - |
+      source env.sh
+      if [ ${ARCH} == "all" ]; then
+        echo "停止并删除AMD测试容器: ${CONTAINER_NAME}-${RANDOM_NUMBER_1}"
+        docker stop ${CONTAINER_NAME}-${RANDOM_NUMBER_1}
+
+        echo "停止并删除ARM测试容器: ${CONTAINER_NAME}-${RANDOM_NUMBER_2}"
+        docker stop ${CONTAINER_NAME}-${RANDOM_NUMBER_2}
+
+      elif [ ${ARCH} == "arm64" ]; then
+        echo "停止并删除ARM测试容器: ${CONTAINER_NAME}-${RANDOM_NUMBER_2}"
+        docker stop ${CONTAINER_NAME}-${RANDOM_NUMBER_2}
+      else
+        echo "停止并删除AMD测试容器: ${CONTAINER_NAME}-${RANDOM_NUMBER_1}"
+        docker stop ${CONTAINER_NAME}-${RANDOM_NUMBER_1}
+      fi
 
 push_job:
   stage: push
