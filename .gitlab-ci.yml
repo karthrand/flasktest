@@ -87,13 +87,13 @@ test_job:
         echo "当前测试架构：${test_arch}"
         echo "启动测试容器：${CONTAINER_NAME}-${random_str}"
         if [[ $test_arch == "arm64" ]]; then
-            docker run --platform linux/arm64 --rm -d --name ${CONTAINER_NAME}-${random_str} $image_name
+            docker run --platform linux/arm64 --rm -d --privileged=true --name ${CONTAINER_NAME}-${random_str} $image_name
             echo "等待容器及服务就绪"
             sleep 35
         else
-            docker run --rm -d --name ${CONTAINER_NAME}-${random_str} $image_name
+            docker run --rm -d --privileged=true --name ${CONTAINER_NAME}-${random_str} $image_name
             echo "等待容器及服务就绪"
-            sleep 10
+            sleep 30
         fi
         ip=`docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${CONTAINER_NAME}-${random_str}`
         echo "当前容器ip：${ip}"
