@@ -18,8 +18,15 @@ services:
     ports:
       - '2202:22'
       - '5000:5000'
+    # 使用docker卷
+    # volumes:
+    #   - flasktest:/data/project
+    # 使用绝对路径
+    # volumes:
+    #   - /data/flasktest/project:/data/project
+    # 使用相对路径
     volumes:
-      - "/data/flasktest/project:/data/project"
+      - ./flasktest/project:/data/project
     links:
       - mysql:mysql
     depends_on:
@@ -39,11 +46,23 @@ services:
       MYSQL_PASSWORD: flask@123
     ports:
       - 3306:3306
+    # 使用docker卷
+    # volumes:
+    #   - mysql:/var/lib/mysql
+    # 使用绝对路径
+    # volumes:
+    #   - /data/mysql:/var/lib/mysql
+    # 使用相对路径
     volumes:
-      - '/data/mysql:/var/lib/mysql'
+      - ./mysql:/var/lib/mysql
     networks:
       test:
         ipv4_address: "172.20.0.2"
 networks:
   test:
+    external: true
+volumes:
+  flasttest:
+    external: true
+  mysql:
     external: true
