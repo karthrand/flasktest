@@ -51,7 +51,7 @@ docker network create --driver bridge --subnet 172.20.0.0/16 --gateway 172.20.0.
 docker pull karthrand/flasktest:latest
 ```
 
-## 创建目录与卷
+## 创建目录与卷(可选)
 
 - 使用卷挂载的目的是为了将数据保存在宿主机上，使得容器停止再启动或者容器重建后，数据不丢失
 - docker-compose中挂载卷的方式有三种

@@ -25,8 +25,8 @@ services:
     # volumes:
     #   - D:\Programs\Docker\data\flasktest\project:/data/project
     # 使用相对路径
-    volumes:
-      - .\flasktest\project:/data/project
+    # volumes:
+    #   - .\flasktest\project:/data/project
     links:
       - mysql:mysql
     depends_on:
@@ -61,6 +61,6 @@ services:
 networks:
   test:
     external: true
-volumes:
-  flasktest:
-  mysql:
+# volumes:
+#   flasktest:
+#   mysql:

@@ -1,7 +1,6 @@
-version: "3.0"
 services:
   flask:
-    image: karthrand/flasktest:debug
+    image: karthrand/flasktest:latest
     tty: true
     container_name: flask
     restart: unless-stopped
@@ -18,6 +17,7 @@ services:
     ports:
       - '2202:22'
       - '5000:5000'
+    # 如果使用挂卷，请将project的内容放到docker-compose.yml所在目录的flasktest目录下
     # 使用docker卷
     # volumes:
     #   - flasktest:/data/project
@@ -25,8 +25,8 @@ services:
     # volumes:
     #   - /data/flasktest/project:/data/project
     # 使用相对路径
-    volumes:
-      - ./flasktest/project:/data/project
+    # volumes:
+    #   - ./flasktest/project:/data/project
     links:
       - mysql:mysql
     depends_on:
@@ -61,8 +61,8 @@ services:
 networks:
   test:
     external: true
-volumes:
-  flasttest:
-    external: true
-  mysql:
-    external: true
+# volumes:
+#   flasttest:
+#     external: true
+#   mysql:
+#     external: true
