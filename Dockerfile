@@ -1,5 +1,5 @@
 ARG ARCH=amd64
-FROM karthrand/openeuler-${ARCH}:22.03-lts-sp2
+FROM karthrand/openeuler-${ARCH}:24.03
 LABEL maintainer="karthrand"
 LABEL "description.content" = "simple flask test image"
 
