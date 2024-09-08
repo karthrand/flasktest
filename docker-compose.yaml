@@ -1,0 +1,30 @@
+services:
+  flask:
+    image: karthrand/flasktest:latest
+    tty: true
+    container_name: flask
+    restart: unless-stopped
+    privileged: true
+    hostname: 'flask'
+    environment:
+      EXT_DB: false
+      DB_HOST: none
+      DB_NAME: flask
+      DB_USER: flask
+      DB_PASSWORD: flask@123
+      ADMIN_PASSWORD: admin@123
+      JWT_SECRET_KEY: LK5FCXTgb69TO38ENkltJnx8JUjf0tzrkb9N20VSb2Ck23hXXIWQC56ndQojwGqy
+    ports:
+      - '2202:22'
+      - '5000:5000'
+    # 使用docker卷
+    volumes:
+      - flasktest:/data/project
+    networks:
+      test:
+        ipv4_address: "172.20.0.3"
+networks:
+  test:
+    external: true
+volumes:
+  flasktest:
