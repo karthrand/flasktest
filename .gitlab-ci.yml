@@ -187,8 +187,13 @@ push_job:
       push_repo_array=($PUSH_REPO)
       for repo in ${push_repo_array[@]}; do
           if [ ${repo} == "dockerhub" ]; then
+              echo "添加代理"
+              export http_proxy=http://192.168.1.4:7890
+              export https_proxy=http://192.168.1.4:7890
+              export no_proxy=localhost,127.0.0.1,10.96.0.0/12,192.168.59.0/24,192.168.49.0/24,192.168.39.0/24
               DOCKER_REGISTRY=docker.io
               echo $DOCKERHUB_PASSWORD | docker login --username $DOCKERHUB_USER --password-stdin $DOCKER_REGISTRY
+
 
           elif [ ${repo} == "aliyun" ]; then
               DOCKER_REGISTRY=registry.cn-hangzhou.aliyuncs.com
@@ -208,4 +213,12 @@ push_job:
           else
               func_amd64
           fi
+
+          if [ ${repo} == "dockerhub" ]; then
+            echo "取消代理"
+            unset http_proxy
+            unset https_proxy
+            unset no_proxy
+          fi
+
       done
