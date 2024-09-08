@@ -4,20 +4,20 @@ stages:
   - push
 
 variables:
-    # 置空则使用当前日期
-    VERSION: ""
-    # 仅amd镜像是否上传
-    AMD_PUSH: "false"
-    # 构建的架构，置空默认为amd
-    ARCH: "all"
-    # 上传的镜像仓库，可选为dockerhub、aliyun、huawei
-    PUSH_REPO: "aliyun huawei"
-    # 没啥用的变量
-    MESSAGE: "中文支持1"
-    # ----常量----
-    IMAGE_NAME: "karthrand/flasktest"
-    CONTAINER_NAME: "flasktest"
-    test_except_str: Success
+  # 置空则使用当前日期
+  VERSION: ""
+  # 仅amd镜像是否上传
+  AMD_PUSH: "false"
+  # 构建的架构，置空默认为amd
+  ARCH: "all"
+  # 上传的镜像仓库，可选为dockerhub、aliyun、huawei
+  PUSH_REPO: "dockerhub aliyun huawei"
+  # 没啥用的变量
+  MESSAGE: "中文支持1"
+  # ----常量----
+  IMAGE_NAME: "karthrand/flasktest"
+  CONTAINER_NAME: "flasktest"
+  test_except_str: Success
 
 build_job:
   stage: build
@@ -27,7 +27,7 @@ build_job:
     GIT_DEPTH: "1"
   rules:
     # 仅在当前分支提交时message包含"镜像构建"时触发
-    - if: '$CI_COMMIT_MESSAGE =~ /镜像构建/'
+    - if: "$CI_COMMIT_MESSAGE =~ /镜像构建/"
       when: on_success
     - when: never
   script:
@@ -63,7 +63,7 @@ build_job:
   artifacts:
     paths:
       - env.sh
-    expire_in: 5 minutes 
+    expire_in: 5 minutes
 
 test_job:
   stage: test
@@ -72,7 +72,7 @@ test_job:
   dependencies:
     - build_job
   rules:
-    - if: '$CI_COMMIT_MESSAGE =~ /镜像构建/'
+    - if: "$CI_COMMIT_MESSAGE =~ /镜像构建/"
       when: on_success
     - when: never
   script:
@@ -147,7 +147,7 @@ push_job:
   dependencies:
     - build_job
   rules:
-    - if: '$CI_COMMIT_MESSAGE =~ /镜像构建/'
+    - if: "$CI_COMMIT_MESSAGE =~ /镜像构建/"
       when: on_success
     - when: never
   script:
@@ -156,7 +156,7 @@ push_job:
       echo "当前镜像版本为：$VERSION"
       echo "当前镜像架构为：$ARCH"
       echo "登录镜像仓库"
-      
+
       func_amd64(){
           echo "上传: $IMAGE_NAME:$VERSION-amd64"
           docker tag $IMAGE_NAME:$VERSION-amd64 $DOCKER_REGISTRY/$IMAGE_NAME:$VERSION-amd64
@@ -183,7 +183,7 @@ push_job:
           docker manifest create  $DOCKER_REGISTRY/$IMAGE_NAME:latest --amend $DOCKER_REGISTRY/$IMAGE_NAME:$VERSION-amd64 --amend $DOCKER_REGISTRY/$IMAGE_NAME:$VERSION-arm64
           docker manifest push $DOCKER_REGISTRY/$IMAGE_NAME:latest
       }  
-    
+
       push_repo_array=($PUSH_REPO)
       for repo in ${push_repo_array[@]}; do
           if [ ${repo} == "dockerhub" ]; then
@@ -209,5 +209,3 @@ push_job:
               func_amd64
           fi
       done
-
-    
