@@ -7,8 +7,8 @@ services:
     privileged: true
     hostname: 'flask'
     environment:
-      EXT_DB: false
-      DB_HOST: none
+      EXT_DB: 'false'
+      DB_HOST: null
       DB_NAME: flask
       DB_USER: flask
       DB_PASSWORD: flask@123
