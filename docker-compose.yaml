@@ -19,7 +19,7 @@ services:
       - '5000:5000'
     # 使用docker卷
     volumes:
-      - ./flasktest:/data/project
+      - ./project:/data/project
     networks:
       test:
         ipv4_address: "172.20.0.3"
