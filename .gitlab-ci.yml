@@ -10,6 +10,8 @@ variables:
   AMD_PUSH: "false"
   # 构建的架构，置空默认为amd
   ARCH: "all"
+  # 是否使用代理, 仅适用于dockerhub上传
+  USE_PROXY: "false"
   # 上传的镜像仓库，可选为dockerhub、aliyun、huawei
   PUSH_REPO: "dockerhub aliyun huawei"
   # 没啥用的变量
@@ -187,10 +189,12 @@ push_job:
       push_repo_array=($PUSH_REPO)
       for repo in ${push_repo_array[@]}; do
           if [ ${repo} == "dockerhub" ]; then
-              echo "添加代理"
-              export http_proxy=http://192.168.1.4:7890
-              export https_proxy=http://192.168.1.4:7890
-              export no_proxy=localhost,127.0.0.1,10.96.0.0/12,192.168.59.0/24,192.168.49.0/24,192.168.39.0/24
+              if [ ${USE_PROXY} == "true"];then
+                echo "添加代理"
+                export http_proxy=http://192.168.1.4:7890
+                export https_proxy=http://192.168.1.4:7890
+                export no_proxy=localhost,127.0.0.1,10.96.0.0/12,192.168.59.0/24,192.168.49.0/24,192.168.39.0/24
+              fi
               DOCKER_REGISTRY=docker.io
               echo $DOCKERHUB_PASSWORD | docker login --username $DOCKERHUB_USER --password-stdin $DOCKER_REGISTRY
 
@@ -214,11 +218,12 @@ push_job:
               func_amd64
           fi
 
-          if [ ${repo} == "dockerhub" ]; then
-            echo "取消代理"
-            unset http_proxy
-            unset https_proxy
-            unset no_proxy
+          if [ ${USE_PROXY} == "true"];then
+            if [ ${repo} == "dockerhub" ]; then
+              echo "取消代理"
+              unset http_proxy
+              unset https_proxy
+              unset no_proxy
+            fi
           fi
-
       done
