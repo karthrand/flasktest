@@ -284,11 +284,11 @@ def register():
     password = request.json.get("password", None)
 
     if not username or not password:
-        return jsonify({"message": "Missing username or password"}, code=400), 400
+        return jsonify({"message": "Missing username or password", "code": 400}), 400
 
     conn = get_db_connection()
     if conn is None:
-        return jsonify({"message": "Database connection failed"}, code=500), 500
+        return jsonify({"message": "Database connection failed", "code": 500}), 500
 
     cursor = conn.cursor(buffered=True)  # 使用缓冲游标
 
@@ -296,7 +296,7 @@ def register():
         # 首先检查用户名是否已存在
         cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
         if cursor.fetchone():
-            return jsonify({"message": "Username already exists"}, code=409), 409
+            return jsonify({"message": "Username already exists", "code": 409}), 409
 
         # 如果用户不存在，插入新用户
         cursor.execute("INSERT INTO users (username, password) VALUES (%s, %s)", (username, password))
@@ -304,12 +304,12 @@ def register():
 
     except Error as e:
         print(f"Database error: {e}")
-        return jsonify({"message": "Database error"}, code=500), 500
+        return jsonify({"message": "Database error", "code": 500}), 500
     finally:
         cursor.close()
         conn.close()
 
-    return jsonify({"message": "User created successfully"}, code=201), 201
+    return jsonify({"message": "User created successfully", "code": 201}), 201
 
 
 # 用户登录路由
@@ -329,7 +329,7 @@ def login():
 
     if user_record and user_record["password"] == password:
         access_token = create_access_token(identity=username)
-        return jsonify(access_token=access_token, code=200)
+        return jsonify({"message": {"access_token": access_token}, "code": 200})
     else:
         return jsonify({"message": "Bad username or password", "code": 401}), 401
 
@@ -339,13 +339,13 @@ def login():
 @jwt_required()
 def protected():
     current_user = get_jwt_identity()
-    return jsonify(logged_in_as=current_user), 200
+    return jsonify({"message": {"logged_in_as": current_user}, "code": 200}), 200
 
 
 # 不受保护的路由
 @app.route("/public", methods=["GET"])
 def unprotected():
-    return jsonify(message="Success", code=200), 200
+    return jsonify({"message": "Success", "code": 200}), 200
 
 
 if __name__ == "__main__":
